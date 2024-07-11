@@ -28,7 +28,10 @@ app.use(
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS,POST,PUT,DELETE");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET,HEAD,OPTIONS,POST,PUT,DELETE"
+  );
   // Use this granting all persmissions ("Access-Control-Allow-Methods", "*");
   res.header(
     "Access-Control-Allow-Headers",
@@ -251,21 +254,61 @@ app.post("/apply", async (req, res) => {
 
 app.get("/getapplied", async (req, res) => {
   const email = req.query.email;
+  const provider = req.query.provider;
+  console.log(email, provider);
   if (!email) {
+    return res.status(400).json({ error: "Email parameter is required" });
+  }
+
+  try {
+    if (provider) {
+      const [result] = await pool.query(
+        `
+        SELECT jobID, seekerEmail
+        FROM Apply
+        JOIN Job ON Apply.jobID = Job.ID
+        WHERE Apply.providerEmail = ?
+        `,
+        email
+      );
+      console.log(result);
+      res.json(result);
+    } else {
+      const [result] = await pool.query(
+        `
+        SELECT jobID, Job.title AS job_title, providerEmail
+        FROM Apply
+        JOIN Job ON Apply.jobID = Job.ID
+        WHERE Apply.seekerEmail = ?
+        `,
+        email
+      );
+      res.json(result);
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.put("/removeapplied", async (req, res) => {
+  const { jobid: jobID, seekerEmail } = req.query;
+  console.log(req.query);
+  if (!jobID || !seekerEmail) {
     return res.status(400).json({ error: "Email parameter is required" });
   }
 
   try {
     const [result] = await pool.query(
       `
-      SELECT Job.title AS job_title, providerEmail
-      FROM Apply
-      JOIN Job ON Apply.jobID = Job.ID
-      WHERE Apply.seekerEmail = ?
+      DELETE FROM Apply
+      WHERE jobID = ? AND seekerEmail = ?;;
       `,
-      email
+      [jobID, seekerEmail]
     );
-    res.json(result);
+    console.log(result);
+    return res.json({
+      sucess: `job at id ${jobID} for ${seekerEmail} sucessfully removed`,
+    });
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
   }
